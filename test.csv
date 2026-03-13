@@ -1,0 +1,6 @@
+OrderID,Product,Category,Sales,Profit
+1,Chair,Furniture,200,40
+2,Table,Furniture,450,90
+3,Pen,Office Supplies,10,3
+4,Notebook,Office Supplies,25,7
+5,Phone,Technology,800,150
