@@ -1,4 +1,4 @@
-import pandas as pd
+import pandas as pd # type: ignore
 import logging 
 from pathlib import Path
 logging.basicConfig(
