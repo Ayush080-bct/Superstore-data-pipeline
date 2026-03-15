@@ -1,28 +1,49 @@
-# Advanced Python Project
+# Superstore Data Engineering Pipeline
 
-A comprehensive ETL (Extract, Transform, Load) project focusing on data processing and analysis of Superstore data.
+An end-to-end ETL and analytics project for processing Superstore data, performing exploratory data analysis (EDA), and preparing datasets for downstream machine learning and reporting.
 
 ## Project Overview
 
-This project demonstrates advanced Python development practices for building scalable data pipelines. It includes data processing, transformation, and analysis workflows using the Superstore dataset.
+This project demonstrates practical data engineering workflows in Python, including extraction, cleaning, transformation, EDA, and pipeline-oriented project structure.
 
 ## Project Structure
 
 ```
 AdvancedPythonProject/
-├── README.md                 # Project documentation
+├── README.md                  # Project documentation
+├── environment.yml            # Conda environment definition
+├── api/
+│   └── main.py               # API entrypoint
 ├── data/
-│   ├── raw/                  # Raw input data
+│   ├── raw/
 │   │   └── SuperstoreData.csv
-│   └── processed/            # Processed and cleaned data
+│   └── processed/
 ├── docs/
-│   ├── README.md             # Documentation
-│   └── Architecture.png       # System architecture diagram
-└── etl/                       # ETL pipeline scripts and modules
+│   ├── README.md
+│   └── Architecture.png      # System architecture diagram
+├── etl/
+│   ├── __init__.py
+│   └── extractors.py
+├── notebook/
+│   └── EDA.ipynb             # Exploratory data analysis
+├── frontend/
+└── ml/
 
 ```
 
-**There will be more directory**
+The repository is actively evolving and more modules will be added.
+
+## Architecture Flow
+
+The pipeline follows this high-level flow:
+
+1. Data Source (multiple sources)
+2. Data Engineering Collection Layer
+3. ETL Processing (Extract, Transform, Load)
+4. Automated EDA and Machine Learning
+5. Scheduling Method
+6. Logging and Monitoring
+7. Application and Report Delivery
 
 
 ## Data
@@ -48,35 +69,38 @@ The project architecture is visualized in [Architecture.png](docs/Architecture.p
 ### Installation
 
 ```bash
-# Clone or navigate to project directory
 cd AdvancedPythonProject
-
-# Create environment from environment.yml
 conda env create -f environment.yml
-
-# Activate the environment
-conda activate advanced-python-project
+conda activate pipeline
 ```
+
+## Current Progress
+
+- Data loading utilities implemented in etl extractors
+- EDA notebook created and executed
+- Initial cleaning and quality checks completed:
+	- Null and NA checks
+	- Data type and shape inspection
+	- Duplicate analysis
+	- Postal_Code removal
+- Distribution analysis added:
+	- Boxplot and histogram visualizations
+	- Sales outlier insight
+	- Sales right-skew interpretation
 
 ## Project Status
 
-🚧 **In Development**
+In development
 - Core ETL structure set up
 - Data source configured
 - Pipeline modules being developed
 
 ## Next Steps
 
-- [ ] Implement core ETL scripts in `etl/` module
+- [ ] Implement transform.py with documented cleaning rules
 - [ ] Add data validation and quality checks
-- [ ] Create data transformation pipelines
-- [ ] Add comprehensive tests
-- [ ] Generate analysis reports
+- [ ] Add reproducible feature engineering steps
+- [ ] Add tests for ETL functions
+- [ ] Expose processed output through API endpoints
+- [ ] Add reporting and model training workflow
 
-## License
-
-[Add your license here]
-
-## Author
-
-Ayush
