@@ -8,99 +8,112 @@ This project demonstrates practical data engineering workflows in Python, includ
 
 ## Project Structure
 
-```
+```text
 AdvancedPythonProject/
-├── README.md                  # Project documentation
-├── environment.yml            # Conda environment definition
-├── api/
-│   └── main.py               # API entrypoint
-├── data/
-│   ├── raw/
-│   │   └── SuperstoreData.csv
-│   └── processed/
-├── docs/
-│   ├── README.md
-│   └── Architecture.png      # System architecture diagram
-├── etl/
-│   ├── __init__.py
-│   └── extractors.py
-├── notebook/
-│   └── EDA.ipynb             # Exploratory data analysis
-├── frontend/
-└── ml/
-
+|-- README.md
+|-- environment.yml
+|-- api/
+|   `-- main.py
+|-- data/
+|   |-- raw/
+|   |   `-- SuperstoreData.csv
+|   `-- processed/
+|       `-- cleansuperstoredata.csv
+|-- docs/
+|   |-- Architecture.png
+|   `-- README.md
+|-- etl/
+|   |-- __init__.py
+|   |-- extractors.py
+|   |-- transform.py
+|   |-- load.py
+|   |-- validate.py
+|   `-- pipeline.py
+|-- notebook/
+|   `-- EDA.ipynb
+|-- frontend/
+|-- ml/
+`-- test.csv
 ```
 
-The repository is actively evolving and more modules will be added.
+## Implemented ETL Modules
 
-## Architecture Flow
+### `etl/extractors.py`
+- Function: `load_data(file_path, encoded_system="ISO-8859-1")`
+- Behavior:
+	- Validates source file path
+	- Reads CSV with configurable encoding
+	- Logs row/column counts
 
-The pipeline follows this high-level flow:
-
-1. Data Source (multiple sources)
-2. Data Engineering Collection Layer
-3. ETL Processing (Extract, Transform, Load)
-4. Automated EDA and Machine Learning
-5. Scheduling Method
-6. Logging and Monitoring
-7. Application and Report Delivery
-
+### `etl/transform.py`
+- Function: `transform(df, order_date_col="Order_Date", ship_date_col="Ship_Date", ...)`
+- Behavior:
+	- Parses order and ship date columns
+	- Creates derived fields:
+		- `Order_Year`, `Order_Month`, `Order_Weekday`
+		- `Ship_Year`, `Ship_Month`, `Ship_Weekday`
+	- Strips whitespace from categorical text columns
+	- Converts categorical text to lowercase (optional)
+	- Removes duplicates (optional)
 
 ## Data
 
-**Source Dataset:** `data/raw/SuperstoreData.csv`
-- Contains Superstore transaction and business data
-- Used for ETL pipeline processing and analysis
+- Raw input: `data/raw/SuperstoreData.csv`
+- Current processed output: `data/processed/cleansuperstoredata.csv`
+- Additional sample input used during development: `test.csv`
 
-**Output:** Processed data stored in `data/processed/`
+## EDA Highlights
 
-## Documentation
+- Sales trends and shipping-lag trends have been analyzed in `notebook/EDA.ipynb`.
+- A concise trend summary is documented in `docs/README.md`.
+- Detailed visual exploration remains in the notebook for reproducibility.
 
-See [docs/README.md](docs/README.md) for detailed documentation.
+## Environment Setup
 
-The project architecture is visualized in [Architecture.png](docs/Architecture.png).
+Prerequisites:
+- Conda
+- Python 3.9 (managed by `environment.yml`)
 
-## Getting Started
-
-### Prerequisites
-- Python 3.8+
-- Conda installed
-
-### Installation
+Create and activate environment:
 
 ```bash
-cd AdvancedPythonProject
 conda env create -f environment.yml
 conda activate pipeline
 ```
 
-## Current Progress
+## Run What Exists Today
 
-- Data loading utilities implemented in etl extractors
-- EDA notebook created and executed
-- Initial cleaning and quality checks completed:
-	- Null and NA checks
-	- Data type and shape inspection
-	- Duplicate analysis
-	- Postal_Code removal
-- Distribution analysis added:
-	- Boxplot and histogram visualizations
-	- Sales outlier insight
-	- Sales right-skew interpretation
+From project root:
 
-## Project Status
+```bash
+python etl/extractors.py
+python etl/transform.py
+```
 
-In development
-- Core ETL structure set up
-- Data source configured
-- Pipeline modules being developed
+Open notebook for analysis:
 
-## Next Steps
+```bash
+jupyter notebook notebook/EDA.ipynb
+```
 
-- [ ] Implement transform.py with documented cleaning rules
-- [ ] Add data validation and quality checks
-- [ ] Add reproducible feature engineering steps
-- [ ] Add tests for ETL functions
-- [ ] Expose processed output through API endpoints
-- [ ] Add reporting and model training workflow
+## Project Roadmap
+
+- [ ] Implement pipeline orchestration in `etl/pipeline.py`
+- [ ] Add explicit validation checks in `etl/validate.py`
+- [ ] Add load target logic in `etl/load.py`
+- [ ] Build FastAPI endpoints in `api/main.py`
+- [ ] Add automated tests for ETL modules
+- [ ] Expand project docs in `docs/README.md`
+- [ ] Add scheduling, monitoring, and logging conventions
+
+## Architecture Reference
+
+- Diagram: `docs/Architecture.png`
+
+High-level intended flow:
+1. Extract source data
+2. Transform and standardize fields
+3. Validate quality constraints
+4. Load curated dataset
+5. Expose via API/reporting/ML workflows
 
