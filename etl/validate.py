@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def validate_data(
     df: pd.DataFrame,
-    required_columns: list[str] | None = None,
+    
     order_date_col: str = "Order_Date",
     ship_date_col: str = "Ship_Date",
     sales_col: str = "Sales",
@@ -20,8 +20,8 @@ def validate_data(
 
     logger.info("Validation started")
 
-    if required_columns is None:
-        required_columns = ["Order_ID", "Order_Date", "Ship_Date", "Customer_ID", "Sales"]
+    
+    required_columns = ["Order_ID", "Order_Date", "Ship_Date", "Customer_ID", "Sales"]
 
     if df.empty:
         logger.error("DataFrame is empty")
@@ -58,8 +58,8 @@ def validate_data(
 
 
 if __name__ == "__main__":
-    from etl.extractors import load_data
-    from etl.transform import transform
+    from extractors import load_data
+    from transform import transform
 
     raw_df = load_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
     transformed_df = transform(raw_df)

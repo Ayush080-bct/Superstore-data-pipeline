@@ -1,6 +1,6 @@
 import pandas as pd  # type: ignore
 import logging
-from etl.extractors import load_data
+from extractors import load_data
 
 logging.basicConfig(
     level=logging.INFO,
