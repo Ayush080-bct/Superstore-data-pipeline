@@ -1,6 +1,6 @@
 import pandas as pd  # type: ignore
 import logging
-from extractors import load_data
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,13 +19,14 @@ def transform(
     """Simple transformation function for ETL pipeline."""
 
     logger.info("Transformation started")
-    data = df.copy()
+    data = df.copy()#This create a new dataframe object with its own copy of data ,changing this won't affect df
     if order_date_col in data.columns:
         data[order_date_col] = pd.to_datetime(data[order_date_col], errors="coerce")
         logger.info(f"Converted {order_date_col} to datetime")
 
     if ship_date_col in data.columns:
-        data[ship_date_col] = pd.to_datetime(data[ship_date_col], errors="coerce")
+        data[ship_date_col] = pd.to_datetime(data[ship_date_col], errors="coerce")#error =coerce 
+        #fill invalid date which can none data type also with NaT(Not a time)
         logger.info(f"Converted {ship_date_col} to datetime")
     data["Order_Year"] = data[order_date_col].dt.year
     data["Order_Month"] = data[order_date_col].dt.month
@@ -55,6 +56,7 @@ def transform(
 
 
 if __name__ == "__main__":
-    df = load_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
+    from  extractors import extract_data
+    df = extract_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
     df = transform(df)
-    print(df.head())
+    

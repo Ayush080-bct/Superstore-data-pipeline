@@ -1,6 +1,7 @@
   
 import pandas as pd  # type: ignore
 import logging
+from typing import Optional
 
 logging.basicConfig(
     level=logging.INFO,
@@ -11,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 def validate_data(
     df: pd.DataFrame,
-    
+    required_columns: Optional[list[str]]=None,#in python version 3.9 , we use this but if i have higher version 
+    #we use list[str]|None=None
     order_date_col: str = "Order_Date",
     ship_date_col: str = "Ship_Date",
     sales_col: str = "Sales",
@@ -20,8 +22,8 @@ def validate_data(
 
     logger.info("Validation started")
 
-    
-    required_columns = ["Order_ID", "Order_Date", "Ship_Date", "Customer_ID", "Sales"]
+    if required_columns is None:
+        required_columns = ["Order_ID", "Order_Date", "Ship_Date", "Customer_ID", "Sales"]
 
     if df.empty:
         logger.error("DataFrame is empty")
@@ -58,9 +60,9 @@ def validate_data(
 
 
 if __name__ == "__main__":
-    from extractors import load_data
+    from extractors import extract_data
     from transform import transform
 
-    raw_df = load_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
+    raw_df = extract_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
     transformed_df = transform(raw_df)
     validate_data(transformed_df)
