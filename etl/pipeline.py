@@ -1,9 +1,9 @@
 import logging
 
-from etl.extractors import load_data as extract
-from etl.transform import transform
-from etl.validate import validate_data
-from etl.load import load_data as load
+from extractors import extract_data
+from transform import transform
+from validate import validate_data
+from load import load_data as load
 
 
 logging.basicConfig(
@@ -20,7 +20,7 @@ def run_pipeline():
     try:
      
         logger.info("Starting extract step")
-        df = extract("data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
+        df = extract_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
         logger.info("Starting transform step")
         df = transform(df)        
         logger.info("Starting validation step")
