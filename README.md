@@ -33,13 +33,14 @@ AdvancedPythonProject/
 |   `-- EDA.ipynb
 |-- frontend/
 |-- ml/
+|   `-- ml.ipynb
 `-- test.csv
 ```
 
 ## Implemented ETL Modules
 
 ### `etl/extractors.py`
-- Function: `load_data(file_path, encoded_system="ISO-8859-1")`
+- Function: `extract_data(file_path, encoded_system="ISO-8859-1")`
 - Behavior:
 	- Validates source file path
 	- Reads CSV with configurable encoding
@@ -56,6 +57,27 @@ AdvancedPythonProject/
 	- Converts categorical text to lowercase (optional)
 	- Removes duplicates (optional)
 
+### `etl/validate.py`
+- Function: `validate_data(df, ...)`
+- Behavior:
+	- Checks empty dataframe
+	- Checks required columns exist
+	- Reports duplicate row count
+	- Checks negative sales row count
+	- Validates `Ship_Date >= Order_Date`
+
+### `etl/load.py`
+- Function: `load_data(df)`
+- Behavior:
+	- Saves processed CSV output to `data/processed/cleansuperstoredata.csv`
+	- PostgreSQL loading scaffold exists and can be enabled
+
+### `etl/pipeline.py`
+- Function: `run_pipeline()`
+- Behavior:
+	- Runs end-to-end ETL steps in sequence:
+		- Extract -> Transform -> Validate -> Load
+
 ## Data
 
 - Raw input: `data/raw/SuperstoreData.csv`
@@ -67,6 +89,19 @@ AdvancedPythonProject/
 - Sales trends and shipping-lag trends have been analyzed in `notebook/EDA.ipynb`.
 - A concise trend summary is documented in `docs/README.md`.
 - Detailed visual exploration remains in the notebook for reproducibility.
+
+## ML Baseline (Implemented)
+
+- Notebook: `ml/ml.ipynb`
+- Current baseline:
+	- Data preparation from processed dataset
+	- Train/test split
+	- Missing-value handling
+	- MinMax scaling (numeric)
+	- One-hot encoding (categorical)
+	- Linear Regression model
+	- Evaluation with MAE, RMSE, R2
+	- Actual vs Predicted and residual plots
 
 ## Environment Setup
 
@@ -88,19 +123,23 @@ From project root:
 ```bash
 python etl/extractors.py
 python etl/transform.py
+python etl/validate.py
+python etl/load.py
+python etl/pipeline.py
 ```
 
 Open notebook for analysis:
 
 ```bash
 jupyter notebook notebook/EDA.ipynb
+jupyter notebook ml/ml.ipynb
 ```
 
 ## Project Roadmap
 
-- [ ] Implement pipeline orchestration in `etl/pipeline.py`
-- [ ] Add explicit validation checks in `etl/validate.py`
-- [ ] Add load target logic in `etl/load.py`
+- [x] Implement pipeline orchestration in `etl/pipeline.py`
+- [x] Add explicit validation checks in `etl/validate.py`
+- [x] Add load target logic in `etl/load.py`
 - [ ] Build FastAPI endpoints in `api/main.py`
 - [ ] Add automated tests for ETL modules
 - [ ] Expand project docs in `docs/README.md`
