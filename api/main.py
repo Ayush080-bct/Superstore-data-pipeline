@@ -12,6 +12,9 @@ from io import StringIO
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Get project root
+PROJECT_ROOT = Path(__file__).parent.parent
+
 from etl.extractors import extract_data
 from etl.transform import transform
 from etl.validate import validate_data
@@ -74,8 +77,16 @@ def extract_only():
     Run only the extraction step
     """
     try:
-        file_path = request.json.get('file_path', '../data/raw/SuperstoreData.csv')
-        encoding = request.json.get('encoding', 'ISO-8859-1')
+        file_path = request.json.get('file_path', None) if request.json else None
+        
+        # Use default if not provided
+        if not file_path:
+            file_path = str(PROJECT_ROOT / 'data' / 'raw' / 'SuperstoreData.csv')
+        elif not file_path.startswith('/'):
+            # If relative path provided, make it absolute
+            file_path = str(PROJECT_ROOT / file_path)
+        
+        encoding = (request.json.get('encoding', 'ISO-8859-1') if request.json else 'ISO-8859-1')
         
         logger.info(f"Extracting data from {file_path}")
         df = extract_data(file_path, encoded_system=encoding)
@@ -102,7 +113,14 @@ def validate_only():
     Run only the validation step on processed data
     """
     try:
-        file_path = request.json.get('file_path', '../data/processed/cleansuperstoredata.csv')
+        file_path = request.json.get('file_path', None) if request.json else None
+        
+        # Use default if not provided
+        if not file_path:
+            file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
+        elif not file_path.startswith('/'):
+            # If relative path provided, make it absolute
+            file_path = str(PROJECT_ROOT / file_path)
         
         logger.info(f"Validating data from {file_path}")
         df = pd.read_csv(file_path)
@@ -135,7 +153,15 @@ def transform_only():
     """
     try:
         request_data = request.json or {}
-        file_path = request_data.get('file_path', '../data/raw/SuperstoreData.csv')
+        file_path = request_data.get('file_path', None)
+        
+        # Use default if not provided
+        if not file_path:
+            file_path = str(PROJECT_ROOT / 'data' / 'raw' / 'SuperstoreData.csv')
+        elif not file_path.startswith('/'):
+            # If relative path provided, make it absolute
+            file_path = str(PROJECT_ROOT / file_path)
+        
         order_date_col = request_data.get('order_date_col', 'Order_Date')
         ship_date_col = request_data.get('ship_date_col', 'Ship_Date')
         lowercase_categories = request_data.get('lowercase_categories', True)
@@ -176,12 +202,23 @@ def load_only():
     Run only the loading step on transformed data
     Accepts optional parameters:
     - file_path: path to transformed data file (default: processed data)
-    - output_path: path for output CSV file (default: '../data/processed/cleansuperstoredata.csv')
+    - output_path: path for output CSV file (default: 'data/processed/cleansuperstoredata.csv')
     """
     try:
         request_data = request.json or {}
-        input_file_path = request_data.get('file_path', '../data/processed/cleansuperstoredata.csv')
-        output_file_path = request_data.get('output_path', '../data/processed/cleansuperstoredata.csv')
+        input_file_path = request_data.get('file_path', None)
+        output_file_path = request_data.get('output_path', None)
+        
+        # Use defaults if not provided
+        if not input_file_path:
+            input_file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
+        elif not input_file_path.startswith('/'):
+            input_file_path = str(PROJECT_ROOT / input_file_path)
+        
+        if not output_file_path:
+            output_file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
+        elif not output_file_path.startswith('/'):
+            output_file_path = str(PROJECT_ROOT / output_file_path)
         
         logger.info(f"Loading data from {input_file_path} to {output_file_path}")
         df = pd.read_csv(input_file_path)
@@ -229,7 +266,7 @@ def get_superstore_data():
         region = request.args.get('region', None)
         segment = request.args.get('segment', None)
         
-        file_path = '../data/processed/cleansuperstoredata.csv'
+        file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
         df = pd.read_csv(file_path)
         
         # Apply filters
@@ -268,7 +305,7 @@ def get_data_stats():
     Get basic statistics about the processed dataset
     """
     try:
-        file_path = '../data/processed/cleansuperstoredata.csv'
+        file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
         df = pd.read_csv(file_path)
         
         stats = {
@@ -318,7 +355,7 @@ def sales_trends():
     """
     try:
         period = request.args.get('period', 'year')
-        file_path = '../data/processed/cleansuperstoredata.csv'
+        file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
         df = pd.read_csv(file_path)
         
         if period == 'month':
@@ -347,17 +384,26 @@ def category_performance():
     Sales performance by category and sub-category
     """
     try:
-        file_path = '../data/processed/cleansuperstoredata.csv'
+        file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
         df = pd.read_csv(file_path)
         
         category_stats = df.groupby(['Category', 'Sub_Category']).agg({
-            'Sales': ['sum', 'mean', 'count'],
-            'Row_ID': 'count'
+            'Sales': ['sum', 'mean', 'count']
         }).round(2)
+        
+        # Convert to JSON-serializable format (avoid NaN issues)
+        category_dict = {}
+        for (category, sub_cat), row in category_stats.iterrows():
+            key = f"{category}|{sub_cat}"
+            category_dict[key] = {
+                'sales_sum': float(row[('Sales', 'sum')]) if pd.notna(row[('Sales', 'sum')]) else 0,
+                'sales_mean': float(row[('Sales', 'mean')]) if pd.notna(row[('Sales', 'mean')]) else 0,
+                'count': int(row[('Sales', 'count')]) if pd.notna(row[('Sales', 'count')]) else 0
+            }
         
         return jsonify({
             'status': 'success',
-            'category_performance': category_stats.to_dict(),
+            'category_performance': category_dict,
             'timestamp': datetime.now().isoformat()
         }), 200
     except Exception as e:
@@ -375,16 +421,26 @@ def regional_analysis():
     Sales analysis by region and segment
     """
     try:
-        file_path = '../data/processed/cleansuperstoredata.csv'
+        file_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
         df = pd.read_csv(file_path)
         
         regional_stats = df.groupby(['Region', 'Segment']).agg({
             'Sales': ['sum', 'mean', 'count']
         }).round(2)
         
+        # Convert to JSON-serializable format (avoid NaN issues)
+        regional_dict = {}
+        for (region, segment), row in regional_stats.iterrows():
+            key = f"{region}|{segment}"
+            regional_dict[key] = {
+                'sales_sum': float(row[('Sales', 'sum')]) if pd.notna(row[('Sales', 'sum')]) else 0,
+                'sales_mean': float(row[('Sales', 'mean')]) if pd.notna(row[('Sales', 'mean')]) else 0,
+                'count': int(row[('Sales', 'count')]) if pd.notna(row[('Sales', 'count')]) else 0
+            }
+        
         return jsonify({
             'status': 'success',
-            'regional_performance': regional_stats.to_dict(),
+            'regional_performance': regional_dict,
             'timestamp': datetime.now().isoformat()
         }), 200
     except Exception as e:
@@ -469,12 +525,16 @@ def retrain_model():
     
     Request body:
     {
-      "data_path": "../data/processed/cleansuperstoredata.csv"
+      "data_path": "data/processed/cleansuperstoredata.csv"
     }
     """
     try:
         request_data = request.json or {}
-        data_path = request_data.get('data_path', '../data/processed/cleansuperstoredata.csv')
+        data_path = request_data.get('data_path', None)
+        if not data_path:
+            data_path = str(PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv')
+        elif not data_path.startswith('/'):
+            data_path = str(PROJECT_ROOT / data_path)
         
         logger.info(f"Retraining model with data from {data_path}")
         predictor = get_predictor()
