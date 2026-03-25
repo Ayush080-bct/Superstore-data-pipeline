@@ -5,6 +5,33 @@ let chartsInitialized = {};
 let allData = [];
 let filteredData = [];
 
+// Utility function to sanitize API responses (convert NaN to null)
+function sanitizeResponse(response) {
+    // Convert NaN to null so it doesn't break JSON parsing
+    return JSON.parse(JSON.stringify(response, (key, value) => {
+        if (typeof value === 'number' && !isFinite(value)) {
+            return null; // Replace NaN, Infinity with null
+        }
+        return value;
+    }));
+}
+
+// Safely fetch and parse JSON responses
+async function fetchAndParse(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        const text = await response.text();
+        
+        // Replace NaN with null in the response text before parsing
+        const sanitizedText = text.replace(/:\s*NaN/g, ': null').replace(/:\s*Infinity/g, ': null');
+        
+        return JSON.parse(sanitizedText);
+    } catch (error) {
+        console.error('Fetch error:', error);
+        throw error;
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     showTab('dashboard');
@@ -13,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Tab Navigation
-function showTab(tabName) {
+function showTab(tabName, clickEvent) {
     // Hide all tabs
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.style.display = 'none';
@@ -27,8 +54,13 @@ function showTab(tabName) {
     // Show selected tab
     document.getElementById(tabName + '-tab').style.display = 'block';
     
-    // Add active class to clicked link
-    event.target.closest('.nav-link').classList.add('active');
+    // Add active class to clicked link (only if event exists)
+    if (clickEvent && clickEvent.target) {
+        const navLink = clickEvent.target.closest ? clickEvent.target.closest('.nav-link') : null;
+        if (navLink) {
+            navLink.classList.add('active');
+        }
+    }
     
     // Load tab-specific data
     setTimeout(() => {
@@ -47,8 +79,7 @@ function showTab(tabName) {
 // API Health Check
 async function checkApiHealth() {
     try {
-        const response = await fetch(`${API_BASE_URL}/health`);
-        const data = await response.json();
+        const data = await fetchAndParse(`${API_BASE_URL}/health`);
         if (data.status === 'healthy') {
             document.getElementById('health-status').textContent = 'API Healthy';
             document.getElementById('health-status').className = 'badge bg-success';
@@ -64,17 +95,21 @@ async function checkApiHealth() {
 
 async function loadDashboardData() {
     try {
-        const response = await fetch(`${API_BASE_URL}/data/stats`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/data/stats`);
         
         if (result.status === 'success') {
             const stats = result.stats;
             
-            // Update stats
-            document.getElementById('total-records').textContent = stats.total_rows.toLocaleString();
-            document.getElementById('total-sales').textContent = '$' + stats.numeric_stats.sales.mean.toFixed(2);
-            document.getElementById('avg-sales').textContent = '$' + stats.numeric_stats.sales.mean.toFixed(2);
-            document.getElementById('categories-count').textContent = stats.unique_categories.Category;
+            // Update stats (handle NaN values)
+            const totalRecords = stats.total_rows || 0;
+            const avgSales = (stats.numeric_stats && stats.numeric_stats.sales && stats.numeric_stats.sales.mean) || 0;
+            const salesMean = (stats.numeric_stats && stats.numeric_stats.sales && stats.numeric_stats.sales.mean) || 0;
+            const categoriesCount = (stats.unique_categories && stats.unique_categories.Category) || 0;
+            
+            document.getElementById('total-records').textContent = totalRecords.toLocaleString();
+            document.getElementById('total-sales').textContent = '$' + parseFloat(salesMean || 0).toFixed(2);
+            document.getElementById('avg-sales').textContent = '$' + parseFloat(avgSales || 0).toFixed(2);
+            document.getElementById('categories-count').textContent = categoriesCount;
             
             // Load charts
             loadSalesTrendChart();
@@ -88,11 +123,10 @@ async function loadDashboardData() {
 
 async function loadSalesTrendChart() {
     try {
-        const response = await fetch(`${API_BASE_URL}/analytics/sales-trends?period=year`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/analytics/sales-trends?period=year`);
         
         if (result.status === 'success' && result.trends) {
-            const trends = result.trends.sum;
+            const trends = result.trends.sum || {};
             
             if (chartsInitialized.yearChart) {
                 chartsInitialized.yearChart.destroy();
@@ -105,7 +139,7 @@ async function loadSalesTrendChart() {
                     labels: Object.keys(trends),
                     datasets: [{
                         label: 'Total Sales',
-                        data: Object.values(trends),
+                        data: Object.values(trends).map(v => isFinite(v) ? v : 0),
                         backgroundColor: '#0d6efd',
                         borderRadius: 6,
                         borderSkipped: false
@@ -138,20 +172,19 @@ async function loadSalesTrendChart() {
 
 async function loadCategoryChart() {
     try {
-        const response = await fetch(`${API_BASE_URL}/analytics/category-performance`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/analytics/category-performance`);
         
         if (result.status === 'success') {
-            const data = result.category_performance;
+            const data = result.category_performance || {};
             const categories = {};
             
-            // Parse nested structure
-            for (const [key, values] of Object.entries(data)) {
-                const category = key[0];
+            // Parse and aggregate by category
+            for (const [key, stats] of Object.entries(data)) {
+                const [category] = key.split('|'); // Get category from "category|subcategory"
                 if (!categories[category]) {
                     categories[category] = 0;
                 }
-                categories[category] += values['Sales']['sum'];
+                categories[category] += stats.sales_sum || 0;
             }
             
             if (chartsInitialized.categoryChart) {
@@ -196,17 +229,16 @@ async function refreshData() {
     const limit = document.getElementById('limit-select').value;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/data/superstore?limit=${limit}&offset=0`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/data/superstore?limit=${limit}&offset=0`);
         
         if (result.status === 'success') {
-            allData = result.data;
+            allData = result.data || [];
             displayDataTable(allData);
             loadFilterOptions();
         }
     } catch (error) {
         console.error('Error loading data:', error);
-        showToast('Error', 'Failed to load data', 'error');
+        showToast('Error', 'Failed to load data: ' + error.message, 'error');
     }
 }
 
@@ -222,11 +254,10 @@ async function applyFilters() {
     
     try {
         const url = params.toString() ? `${API_BASE_URL}/data/superstore?${params}&limit=1000` : `${API_BASE_URL}/data/superstore?limit=1000`;
-        const response = await fetch(url);
-        const result = await response.json();
+        const result = await fetchAndParse(url);
         
         if (result.status === 'success') {
-            filteredData = result.data;
+            filteredData = result.data || [];
             currentPage = 0;
             displayDataTable(filteredData);
         }
@@ -264,14 +295,13 @@ function displayDataTable(data) {
 
 async function loadFilterOptions() {
     try {
-        const response = await fetch(`${API_BASE_URL}/data/superstore?limit=1000`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/data/superstore?limit=1000`);
         
         if (result.status === 'success') {
-            const data = result.data;
-            const categories = [...new Set(data.map(row => row['Category']))];
-            const regions = [...new Set(data.map(row => row['Region']))];
-            const segments = [...new Set(data.map(row => row['Segment']))];
+            const data = result.data || [];
+            const categories = [...new Set(data.map(row => row['Category']).filter(Boolean))];
+            const regions = [...new Set(data.map(row => row['Region']).filter(Boolean))];
+            const segments = [...new Set(data.map(row => row['Segment']).filter(Boolean))];
             
             populateSelect('filter-category', categories);
             populateSelect('filter-region', regions);
@@ -314,12 +344,11 @@ async function runPipeline() {
     logsDiv.innerHTML = '<div class="log-entry log-info">Running full ETL pipeline...</div>';
     
     try {
-        const response = await fetch(`${API_BASE_URL}/pipeline/run`, {
+        const data = await fetchAndParse(`${API_BASE_URL}/pipeline/run`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
         
-        const data = await response.json();
         spinner.style.display = 'none';
         
         if (data.status === 'success') {
@@ -339,7 +368,7 @@ async function runPipeline() {
 async function runExtract() {
     addPipelineLog('Starting extraction...', 'info');
     try {
-        const response = await fetch(`${API_BASE_URL}/pipeline/extract`, {
+        const data = await fetchAndParse(`${API_BASE_URL}/pipeline/extract`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -348,7 +377,6 @@ async function runExtract() {
             })
         });
         
-        const data = await response.json();
         if (data.status === 'success') {
             addPipelineLog(`Extracted ${data.rows} rows and ${data.columns} columns`, 'success');
         } else {
@@ -362,7 +390,7 @@ async function runExtract() {
 async function runTransform() {
     addPipelineLog('Starting transformation...', 'info');
     try {
-        const response = await fetch(`${API_BASE_URL}/pipeline/transform`, {
+        const data = await fetchAndParse(`${API_BASE_URL}/pipeline/transform`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -374,7 +402,6 @@ async function runTransform() {
             })
         });
         
-        const data = await response.json();
         if (data.status === 'success') {
             addPipelineLog(`Transformed ${data.rows} rows, ${data.columns} columns`, 'success');
         } else {
@@ -388,7 +415,7 @@ async function runTransform() {
 async function runValidate() {
     addPipelineLog('Starting validation...', 'info');
     try {
-        const response = await fetch(`${API_BASE_URL}/pipeline/validate`, {
+        const data = await fetchAndParse(`${API_BASE_URL}/pipeline/validate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -396,7 +423,6 @@ async function runValidate() {
             })
         });
         
-        const data = await response.json();
         if (data.status === 'success') {
             addPipelineLog('✓ Data validation passed', 'success');
         } else {
@@ -428,11 +454,10 @@ async function loadSalesTrends() {
     const period = document.querySelector('input[name="period"]:checked').value;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/analytics/sales-trends?period=${period}`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/analytics/sales-trends?period=${period}`);
         
         if (result.status === 'success' && result.trends) {
-            const trends = result.trends.sum;
+            const trends = result.trends.sum || {};
             
             if (chartsInitialized.trendsChart) {
                 chartsInitialized.trendsChart.destroy();
@@ -445,7 +470,7 @@ async function loadSalesTrends() {
                     labels: Object.keys(trends),
                     datasets: [{
                         label: 'Total Sales',
-                        data: Object.values(trends),
+                        data: Object.values(trends).map(v => isFinite(v) ? v : 0),
                         borderColor: '#0d6efd',
                         backgroundColor: 'rgba(13, 110, 253, 0.1)',
                         borderWidth: 2,
@@ -477,64 +502,63 @@ async function loadSalesTrends() {
 
 async function loadCategoryPerformance() {
     try {
-        const response = await fetch(`${API_BASE_URL}/analytics/category-performance`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/analytics/category-performance`);
         
         if (result.status === 'success') {
             const tbody = document.getElementById('category-tbody');
             tbody.innerHTML = '';
             
-            const data = result.category_performance;
-            const categories = {};
+            const data = result.category_performance || {};
             
-            for (const [key, values] of Object.entries(data)) {
-                const category = key[0];
-                if (!categories[category]) {
-                    categories[category] = { sales: 0, count: 0 };
-                }
-                categories[category].sales += values['Sales']['sum'];
-                categories[category].count += values['Sales']['count'];
-            }
-            
-            for (const [cat, stats] of Object.entries(categories)) {
+            for (const [key, stats] of Object.entries(data)) {
+                const [category, subCategory] = key.split('|');
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><strong>${cat}</strong></td>
-                    <td>$${stats.sales.toFixed(2)}</td>
-                    <td>${stats.count}</td>
+                    <td><strong>${category}</strong></td>
+                    <td>$${parseFloat(stats.sales_sum || 0).toFixed(2)}</td>
+                    <td>${stats.count || 0}</td>
                 `;
                 tbody.appendChild(tr);
+            }
+            
+            if (Object.keys(data).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No data available</td></tr>';
             }
         }
     } catch (error) {
         console.error('Error loading category performance:', error);
+        showToast('Error', 'Failed to load category performance', 'error');
     }
 }
 
 async function loadRegionalPerformance() {
     try {
-        const response = await fetch(`${API_BASE_URL}/analytics/regional-analysis`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/analytics/regional-analysis`);
         
         if (result.status === 'success') {
             const tbody = document.getElementById('region-tbody');
             tbody.innerHTML = '';
             
-            const data = result.regional_performance;
+            const data = result.regional_performance || {};
             
-            for (const [key, values] of Object.entries(data)) {
-                const [region, segment] = key;
+            for (const [key, stats] of Object.entries(data)) {
+                const [region, segment] = key.split('|');
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${region}</strong></td>
                     <td>${segment}</td>
-                    <td>$${values['Sales']['sum'].toFixed(2)}</td>
+                    <td>$${parseFloat(stats.sales_sum || 0).toFixed(2)}</td>
                 `;
                 tbody.appendChild(tr);
+            }
+            
+            if (Object.keys(data).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No data available</td></tr>';
             }
         }
     } catch (error) {
         console.error('Error loading regional performance:', error);
+        showToast('Error', 'Failed to load regional performance', 'error');
     }
 }
 
@@ -547,8 +571,7 @@ async function loadMLData() {
 
 async function loadModelInfo() {
     try {
-        const response = await fetch(`${API_BASE_URL}/model/info`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/model/info`);
         
         const infoDiv = document.getElementById('model-info');
         
@@ -557,7 +580,7 @@ async function loadModelInfo() {
             infoDiv.innerHTML = `
                 <p><strong>Model Type:</strong> Linear Regression</p>
                 <p><strong>Training Status:</strong> <span class="badge bg-success">Trained</span></p>
-                <p><strong>Features Used:</strong> ${info.feature_count}</p>
+                <p><strong>Features Used:</strong> ${info.feature_count || 'N/A'}</p>
                 <p><strong>Training Date:</strong> ${info.training_date || 'Not available'}</p>
             `;
         } else {
@@ -571,17 +594,20 @@ async function loadModelInfo() {
 
 async function loadModelMetrics() {
     try {
-        const response = await fetch(`${API_BASE_URL}/model/metrics`);
-        const result = await response.json();
+        const result = await fetchAndParse(`${API_BASE_URL}/model/metrics`);
         
         const metricsDiv = document.getElementById('model-metrics');
         
         if (result.status === 'success') {
-            const metrics = result.metrics;
+            const metrics = result.metrics || {};
+            const mae = metrics.mae || metrics.MAE || 'N/A';
+            const rmse = metrics.rmse || metrics.RMSE || 'N/A';
+            const r2 = (metrics.r2_score || metrics.r2_score_value || 0).toFixed(4);
+            
             metricsDiv.innerHTML = `
-                <p><strong>Mean Absolute Error (MAE):</strong> $${metrics.mae || metrics.MAE}</p>
-                <p><strong>Root Mean Squared Error (RMSE):</strong> $${metrics.rmse || metrics.RMSE}</p>
-                <p><strong>R² Score:</strong> ${(metrics.r2_score || metrics.r2_score_value || 0).toFixed(4)}</p>
+                <p><strong>Mean Absolute Error (MAE):</strong> ${isFinite(mae) ? '$' + parseFloat(mae).toFixed(2) : mae}</p>
+                <p><strong>Root Mean Squared Error (RMSE):</strong> ${isFinite(rmse) ? '$' + parseFloat(rmse).toFixed(2) : rmse}</p>
+                <p><strong>R² Score:</strong> ${r2}</p>
             `;
         } else {
             metricsDiv.innerHTML = '<p class="text-warning">Metrics not available</p>';
@@ -595,15 +621,13 @@ async function retrainModel() {
     showToast('Info', 'Retraining model...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/model/retrain`, {
+        const result = await fetchAndParse(`${API_BASE_URL}/model/retrain`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 data_path: '../data/processed/cleansuperstoredata.csv'
             })
         });
-        
-        const result = await response.json();
         
         if (result.status === 'success') {
             showToast('Success', 'Model retrained successfully', 'success');
@@ -613,7 +637,7 @@ async function retrainModel() {
             showToast('Error', result.message, 'error');
         }
     } catch (error) {
-        showToast('Error', 'Model retraining failed', 'error');
+        showToast('Error', 'Model retraining failed: ' + error.message, 'error');
     }
 }
 
@@ -625,13 +649,13 @@ async function makePrediction() {
     const discount = parseFloat(document.getElementById('pred-discount').value);
     const profit = parseFloat(document.getElementById('pred-profit').value);
     
-    if (!segment || !region || !category || !quantity || !discount || !profit) {
+    if (!segment || !region || !category || !quantity || discount === null || !profit) {
         showToast('Error', 'Please fill in all fields', 'error');
         return;
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/predict/sales`, {
+        const result = await fetchAndParse(`${API_BASE_URL}/predict/sales`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -644,18 +668,17 @@ async function makePrediction() {
             })
         });
         
-        const result = await response.json();
-        
         if (result.status === 'success') {
             const predictionDiv = document.getElementById('prediction-result');
-            document.getElementById('predicted-value').textContent = '$' + result.predicted_sales.toFixed(2);
+            const predicted = result.predicted_sales || 0;
+            document.getElementById('predicted-value').textContent = '$' + parseFloat(predicted).toFixed(2);
             predictionDiv.style.display = 'block';
             showToast('Success', 'Prediction completed', 'success');
         } else {
             showToast('Error', result.message, 'error');
         }
     } catch (error) {
-        showToast('Error', 'Prediction failed', 'error');
+        showToast('Error', 'Prediction failed: ' + error.message, 'error');
         console.error('Prediction error:', error);
     }
 }
