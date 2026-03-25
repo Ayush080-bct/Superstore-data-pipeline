@@ -2,7 +2,7 @@ import asyncio
 import csv
 import os
 import random
-import hashlib
+import hashlib  # for generating hash
 from playwright.async_api import async_playwright
 
 # ----------------------------------------------------------------------
@@ -30,25 +30,17 @@ def compute_hash(product_name, sales):
     return hashlib.sha256(combined).hexdigest()
 
 def load_existing_hashes(csv_path):
-    """
-    Read existing eBay CSV and return a set of hashes.
-    If the CSV lacks a 'Hash' column, compute hashes on the fly.
-    """
+    """Read existing CSV and return a set of hashes."""
     existing = set()
     if os.path.exists(csv_path):
         try:
             with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
+                    # The hash column might not exist in older files
                     h = row.get("Hash")
                     if h:
                         existing.add(h)
-                    else:
-                        # Backward compatibility: compute hash from product name and sales
-                        name = row.get("Product_Name", "")
-                        sales = row.get("Sales", "")
-                        if name and sales:
-                            existing.add(compute_hash(name, sales))
         except Exception as e:
             print(f"⚠️ Error reading existing CSV: {e}")
     return existing
@@ -63,15 +55,15 @@ def append_to_csv(csv_path, new_rows):
             writer.writeheader()
         writer.writerows(new_rows)
 
-async def scrape_ebay_v3(max_pages=10):
+async def scrape_amazon_v1(max_pages=10):
     """
-    Scrapes eBay product listings using a randomly selected single word
+    Scrapes Amazon product listings using a randomly selected single word
     as the search term and a random page number. Appends only unique products
     (by hash of name + price) to the output file.
     """
     output_dir = 'data/raw'
     os.makedirs(output_dir, exist_ok=True)
-    csv_path = f'{output_dir}/ebay_scraped.csv'
+    csv_path = f'{output_dir}/amazon_scraped.csv'
 
     # Load existing hashes to avoid duplicates
     existing_hashes = load_existing_hashes(csv_path)
@@ -89,69 +81,105 @@ async def scrape_ebay_v3(max_pages=10):
         browser = await p.chromium.launch(headless=False)
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            viewport={'width': 1280, 'height': 800}
+            viewport={'width': 1920, 'height': 1080}
         )
         page = await context.new_page()
         new_results = []
 
-        url = f"https://www.ebay.com/sch/i.html?_nkw={search_term.replace(' ', '+')}&_pgn={random_page}"
+        url = f"https://www.amazon.com/s?k={search_term.replace(' ', '+')}&page={random_page}"
         print(f"\n📡 Loading URL: {url}")
 
-        try:
-            await page.goto(url, wait_until="load", timeout=60000)
+        await page.goto(url, wait_until="domcontentloaded")
 
-            # Check for CAPTCHA / human verification
-            if "captcha" in page.url or await page.get_by_text("Verify you are human").is_visible():
-                print("🛑 Bot detection triggered! Please solve the CAPTCHA in the browser window.")
-                await page.wait_for_selector(".s-item", timeout=60000)
-
-        except Exception as e:
-            print(f"⚠️ Page load failed: {e}")
+        # BOT CHECK
+        if "api-services-support@amazon.com" in await page.content():
+            print("🚨 CAPTCHA detected. Amazon is blocking this session.")
+            await page.screenshot(path=f"{output_dir}/captcha_alert.png")
             await browser.close()
             return
 
-        # Wait for content and extract
+        # SCROLL
+        print("🕵️ Scrolling to trigger lazy-loading...")
+        for _ in range(3):
+            await page.mouse.wheel(0, 800)
+            await asyncio.sleep(1.5)
+
+        # CONTAINER CHECK
         try:
-            await page.wait_for_selector(".s-item, .s-card", timeout=15000)
+            await page.wait_for_selector(".s-main-slot", timeout=10000)
         except:
-            print("❌ No listing container found. Saving screenshot for inspection.")
-            await page.screenshot(path=f"{output_dir}/ebay_error_layout.png")
+            print("❌ Failed to find .s-main-slot. Saving layout for inspection.")
+            await page.screenshot(path=f"{output_dir}/error_layout.png")
             await browser.close()
             return
 
-        listings = await page.locator(".s-item, .s-card, [class*='s-item__wrapper']").all()
-        print(f"📦 Found {len(listings)} items.")
+        listings = await page.locator("div.s-result-item[data-asin]").all()
+        print(f"📦 Found {len(listings)} items with data-asin.")
 
         items_on_this_page = 0
-        for idx, item in enumerate(listings[2:50]):  # skip first two (often ads)
+        for index, item in enumerate(listings):
+            asin = await item.get_attribute("data-asin")
+            if not asin or len(asin) < 5:
+                continue
+
+            # diagnostic dump of first item
+            if index == 0:
+                item_html = await item.inner_html()
+                with open(f"{output_dir}/debug_item_structure.txt", "w", encoding="utf-8") as f:
+                    f.write(item_html)
+                print(f"🔬 Saved item {asin} HTML to debug_item_structure.txt")
+
             try:
-                title_el = item.locator("[class*='title']").first
+                # TITLE
+                title_el = item.locator("h2 a, .a-size-medium, .a-size-base-plus").first
                 title = await title_el.inner_text() if await title_el.count() > 0 else "N/A"
                 title = title.strip()
 
-                # Skip sponsored items
-                if "sponsored" in title.lower() or "Shop on" in title:
-                    print(f"   ⏩ Item {idx}: Sponsored. Skipping.")
+                # Skip "Amazon's Choice"
+                if "Amazon's Choice" in title:
+                    print(f"   ⏩ Item {index} [{asin}]: Contains 'Amazon's Choice'. Skipping.")
                     continue
 
-                price_el = item.locator("[class*='price']").first
-                price_text = await price_el.inner_text() if await price_el.count() > 0 else ""
-                if not price_text:
-                    print(f"   ⚠️ Item {idx}: No price found. Skipping.")
+                # PRICE
+                price_val = None
+                offscreen = item.locator(".a-price .a-offscreen").first
+                whole = item.locator(".a-price-whole").first
+                color_price = item.locator(".a-color-price").first
+                price_search = item.get_by_text("$", exact=False).first
+
+                if await offscreen.count() > 0:
+                    price_val = await offscreen.inner_text()
+                elif await whole.count() > 0:
+                    w_text = await whole.inner_text()
+                    f_el = item.locator(".a-price-fraction").first
+                    f_text = await f_el.inner_text() if await f_el.count() > 0 else "00"
+                    price_val = f"{w_text}.{f_text}"
+                elif await color_price.count() > 0:
+                    price_val = await color_price.inner_text()
+                elif await price_search.count() > 0:
+                    price_val = await price_search.inner_text()
+
+                if not price_val or len(price_val.strip()) == 0:
+                    print(f"   ⚠️ Item {index} [{asin}]: No price found. Skipping.")
                     continue
 
-                # Clean price (first part if range, remove $, commas)
-                clean_price = price_text.replace('$', '').replace(',', '').split(' to ')[0].strip()
+                clean_price = price_val.split('\n')[0].replace('$', '').replace(',', '').strip()
 
-                # Generate hash
+                # SPONSORED
+                is_sponsored = await item.locator("text='Sponsored', .puis-sponsored-label-text").count() > 0
+                if is_sponsored:
+                    print(f"   ⏩ Item {index} [{asin}]: Sponsored. Skipping.")
+                    continue
+
+                # Generate hash from product name and price
                 row_hash = compute_hash(title, clean_price)
 
-                # Skip if already in DB
+                # Skip if hash already exists
                 if row_hash in existing_hashes:
-                    print(f"   ⏩ Item {idx}: Already in database (hash match). Skipping.")
+                    print(f"   ⏩ Item {index} [{asin}]: Already in database (hash match). Skipping.")
                     continue
 
-                print(f"   ✨ Item {idx}: Found '{title[:35]}...' at ${clean_price}")
+                print(f"   ✨ Item {index} [{asin}]: Found '{title[:35]}...' at ${clean_price}")
 
                 new_results.append({
                     "Product_Name": title,
@@ -161,7 +189,7 @@ async def scrape_ebay_v3(max_pages=10):
                 items_on_this_page += 1
 
             except Exception as e:
-                print(f"   ❌ Item {idx} ERROR: {str(e)[:50]}")
+                print(f"   ❌ Item {index} ERROR: {str(e)[:50]}")
                 continue
 
         print(f"🏁 Page {random_page} Summary: Extracted {items_on_this_page} new items.")
@@ -175,4 +203,4 @@ async def scrape_ebay_v3(max_pages=10):
             print("\n💀 No new items to append. All products already exist or nothing found.")
 
 if __name__ == "__main__":
-    asyncio.run(scrape_ebay_v3(max_pages=10))
+    asyncio.run(scrape_amazon_v1(max_pages=10))
