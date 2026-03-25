@@ -1,10 +1,13 @@
 import pandas as pd  # type: ignore
 import logging
+from pathlib import Path
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger=logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).parent.parent
 def transform(
     df: pd.DataFrame,
     order_date_col: str = "Order_Date",
@@ -59,6 +62,6 @@ def transform(
 
 if __name__ == "__main__":
     from  extractors import extract_data
-    df = extract_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
+    df = extract_data(str(PROJECT_ROOT / "data" / "raw" / "SuperstoreData.csv"), encoded_system="ISO-8859-1")
     df = transform(df)
     

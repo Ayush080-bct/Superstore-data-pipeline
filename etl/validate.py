@@ -2,6 +2,7 @@
 import pandas as pd  # type: ignore
 import logging
 from typing import Optional
+from pathlib import Path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -9,6 +10,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).parent.parent
 
 def validate_data(
     df: pd.DataFrame,
@@ -63,6 +65,6 @@ if __name__ == "__main__":
     from extractors import extract_data
     from transform import transform
 
-    raw_df = extract_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
+    raw_df = extract_data(str(PROJECT_ROOT / "data" / "raw" / "SuperstoreData.csv"), encoded_system="ISO-8859-1")
     transformed_df = transform(raw_df)
     validate_data(transformed_df)

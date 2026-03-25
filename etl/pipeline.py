@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from .extractors import extract_data
 from .transform import transform
@@ -13,14 +14,19 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent
+
 
 def run_pipeline():
     logger.info("Pipeline started")
 
     try:
-     
+        # Use absolute paths based on project root
+        raw_data_path = PROJECT_ROOT / "data" / "raw" / "SuperstoreData.csv"
+        
         logger.info("Starting extract step")
-        df = extract_data("../data/raw/SuperstoreData.csv", encoded_system="ISO-8859-1")
+        df = extract_data(str(raw_data_path), encoded_system="ISO-8859-1")
         logger.info("Starting transform step")
         df = transform(df)        
         logger.info("Starting validation step")

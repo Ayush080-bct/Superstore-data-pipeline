@@ -12,6 +12,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).parent.parent
 
 def save_to_csv(df: pd.DataFrame, file_path: str):
     path = Path(file_path)#create a Path instance ,pathlib.Path gives an object-oriented way
@@ -54,7 +55,7 @@ def load_data(df: pd.DataFrame):
     logger.info("Starting load step")
     
   
-    save_to_csv(df, "../data/processed/cleansuperstoredata.csv")
+    save_to_csv(df, str(PROJECT_ROOT / "data" / "processed" / "cleansuperstoredata.csv"))
   
     # save_to_postgres(df, password=password)
     

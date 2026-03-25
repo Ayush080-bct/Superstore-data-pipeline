@@ -10,6 +10,7 @@ logging.basicConfig(
 
 )
 logger=logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).parent.parent
 def extract_data(file_path:str,encoded_system:str="ISO-8859-1") ->pd.DataFrame:
     file_path=Path(file_path)
     if not file_path.exists():
@@ -22,6 +23,6 @@ def extract_data(file_path:str,encoded_system:str="ISO-8859-1") ->pd.DataFrame:
         logger.error(f"Error Loading file{file_path}:{str(e)}")
         raise
 if __name__=="__main__":
-    df=extract_data("../test.csv",encoded_system="ISO-8859-1")
+    df=extract_data(str(PROJECT_ROOT / "test.csv"),encoded_system="ISO-8859-1")
     print(df.head())
     
