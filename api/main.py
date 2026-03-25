@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import sys
+from flask_cors import CORS
 from pathlib import Path
 import logging
 import pandas as pd
@@ -19,7 +20,7 @@ from etl.pipeline import run_pipeline
 from ml.model import get_predictor
 
 app = Flask(__name__)
-
+CORS(app)
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
