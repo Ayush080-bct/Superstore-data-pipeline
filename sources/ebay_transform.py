@@ -8,7 +8,7 @@ def transform_ebay_data(input_file, output_file):
     try:
         df = pd.read_csv(input_file)
     except FileNotFoundError:
-        print("❌ Error: superstore_scraped.csv not found. Run the scraper first!")
+        print("❌ Error: ebay_scraped.csv not found. Run the scraper first!")
         return
 
     # 2. Clean the 'Sales' column
@@ -45,4 +45,4 @@ def transform_ebay_data(input_file, output_file):
     print(f"💾 Cleaned data saved to: {output_file}")
 
 if __name__ == "__main__":
-    transform_ebay_data('data/raw/ebay_scraped.csv', 'data/processed/ebay_cleaned.csv')
+    transform_ebay_data('../data/raw/ebay_scraped.csv', '../data/processed/ebay_cleaned.csv')

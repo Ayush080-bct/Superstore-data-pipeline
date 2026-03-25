@@ -1,158 +1,167 @@
-# Superstore Data Engineering Pipeline
+# Superstore Data Pipeline
 
-An end-to-end ETL and analytics project for processing Superstore data, performing exploratory data analysis (EDA), and preparing datasets for downstream machine learning and reporting.
+End-to-end data engineering and analytics project built in Python with:
+- ETL pipeline for Superstore data
+- Flask API for pipeline control, analytics, and ML inference
+- Frontend dashboard for visualization and operations
+- EDA and ML notebooks for experimentation
 
-## Project Overview
+## Features
 
-This project demonstrates practical data engineering workflows in Python, including extraction, cleaning, transformation, EDA, and pipeline-oriented project structure.
+- ETL pipeline: extract, transform, validate, and load curated data
+- REST API for:
+  - health check
+  - ETL step execution
+  - dataset access and stats
+  - analytics endpoints
+  - model retraining and sales prediction
+- Browser dashboard in `frontend/`
+- ML model lifecycle in `ml/model.py` with persisted artifacts in `ml/models/`
 
-## Project Structure
+## Repository Structure
 
 ```text
 AdvancedPythonProject/
 |-- README.md
+|-- QUICKSTART.md
+|-- requirements.txt
 |-- environment.yml
 |-- api/
-|   `-- main.py
+|   |-- main.py
+|   `-- README.md
 |-- data/
 |   |-- raw/
-|   |   `-- SuperstoreData.csv
+|   |   |-- SuperstoreData.csv
+|   |   `-- ebay_scraped.csv
 |   `-- processed/
-|       `-- cleansuperstoredata.csv
-|-- docs/
-|   |-- Architecture.png
-|   `-- README.md
+|       |-- cleansuperstoredata.csv
+|       |-- cleandata.csv
+|       `-- ebay_cleaned.csv
 |-- etl/
-|   |-- __init__.py
 |   |-- extractors.py
 |   |-- transform.py
-|   |-- load.py
 |   |-- validate.py
-|   `-- pipeline.py
-|-- notebook/
-|   `-- EDA.ipynb
-|-- frontend/
+|   |-- load.py
+|   |-- pipeline.py
+|   `-- daily_report.py
 |-- ml/
-|   `-- ml.ipynb
-`-- test.csv
+|   |-- model.py
+|   |-- ml.ipynb
+|   `-- models/
+|-- notebook/
+|   |-- EDA.ipynb
+|   `-- Eda2.ipynb
+|-- frontend/
+|   |-- index.html
+|   |-- app.js
+|   `-- styles.css
+|-- reports/
+|   `-- sales_product_report.csv
+`-- sources/
+    |-- ebay_scraper.py
+    `-- ebay_transform.py
 ```
 
-## Implemented ETL Modules
+## Quick Start
 
-### `etl/extractors.py`
-- Function: `extract_data(file_path, encoded_system="ISO-8859-1")`
-- Behavior:
-	- Validates source file path
-	- Reads CSV with configurable encoding
-	- Logs row/column counts
-
-### `etl/transform.py`
-- Function: `transform(df, order_date_col="Order_Date", ship_date_col="Ship_Date", ...)`
-- Behavior:
-	- Parses order and ship date columns
-	- Creates derived fields:
-		- `Order_Year`, `Order_Month`, `Order_Weekday`
-		- `Ship_Year`, `Ship_Month`, `Ship_Weekday`
-	- Strips whitespace from categorical text columns
-	- Converts categorical text to lowercase (optional)
-	- Removes duplicates (optional)
-
-### `etl/validate.py`
-- Function: `validate_data(df, ...)`
-- Behavior:
-	- Checks empty dataframe
-	- Checks required columns exist
-	- Reports duplicate row count
-	- Checks negative sales row count
-	- Validates `Ship_Date >= Order_Date`
-
-### `etl/load.py`
-- Function: `load_data(df)`
-- Behavior:
-	- Saves processed CSV output to `data/processed/cleansuperstoredata.csv`
-	- PostgreSQL loading scaffold exists and can be enabled
-
-### `etl/pipeline.py`
-- Function: `run_pipeline()`
-- Behavior:
-	- Runs end-to-end ETL steps in sequence:
-		- Extract -> Transform -> Validate -> Load
-
-## Data
-
-- Raw input: `data/raw/SuperstoreData.csv`
-- Current processed output: `data/processed/cleansuperstoredata.csv`
-- Additional sample input used during development: `test.csv`
-
-## EDA Highlights
-
-- Sales trends and shipping-lag trends have been analyzed in `notebook/EDA.ipynb`.
-- A concise trend summary is documented in `docs/README.md`.
-- Detailed visual exploration remains in the notebook for reproducibility.
-
-## ML Baseline (Implemented)
-
-- Notebook: `ml/ml.ipynb`
-- Current baseline:
-	- Data preparation from processed dataset
-	- Train/test split
-	- Missing-value handling
-	- MinMax scaling (numeric)
-	- One-hot encoding (categorical)
-	- Linear Regression model
-	- Evaluation with MAE, RMSE, R2
-	- Actual vs Predicted and residual plots
-
-## Environment Setup
-
-Prerequisites:
-- Conda
-- Python 3.9 (managed by `environment.yml`)
-
-Create and activate environment:
+From the project root:
 
 ```bash
 conda env create -f environment.yml
 conda activate pipeline
 ```
 
-## Run What Exists Today
-
-From project root:
+If you prefer pip:
 
 ```bash
-python etl/extractors.py
-python etl/transform.py
-python etl/validate.py
-python etl/load.py
+pip install -r requirements.txt
+```
+
+## Run the ETL Pipeline
+
+```bash
 python etl/pipeline.py
 ```
 
-Open notebook for analysis:
+Default input and output:
+- Input: `data/raw/SuperstoreData.csv`
+- Output: `data/processed/cleansuperstoredata.csv`
+
+## Run the API
 
 ```bash
-jupyter notebook notebook/EDA.ipynb
-jupyter notebook ml/ml.ipynb
+python api/main.py
 ```
 
-## Project Roadmap
+API base URL:
+- `http://localhost:5000/api`
 
-- [x] Implement pipeline orchestration in `etl/pipeline.py`
-- [x] Add explicit validation checks in `etl/validate.py`
-- [x] Add load target logic in `etl/load.py`
-- [ ] Build FastAPI endpoints in `api/main.py`
-- [ ] Add automated tests for ETL modules
-- [ ] Expand project docs in `docs/README.md`
-- [ ] Add scheduling, monitoring, and logging conventions
+Health check:
 
-## Architecture Reference
+```bash
+curl http://localhost:5000/api/health
+```
 
-- Diagram: `docs/Architecture.png`
+## Run the Frontend
 
-High-level intended flow:
-1. Extract source data
-2. Transform and standardize fields
-3. Validate quality constraints
-4. Load curated dataset
-5. Expose via API/reporting/ML workflows
+In a separate terminal:
+
+```bash
+cd frontend
+python -m http.server 8000
+```
+
+Open:
+- `http://localhost:8000`
+
+The frontend expects the API at:
+- `http://localhost:5000/api`
+
+## Core API Endpoints
+
+Pipeline:
+- `POST /api/pipeline/run`
+- `POST /api/pipeline/extract`
+- `POST /api/pipeline/transform`
+- `POST /api/pipeline/validate`
+- `POST /api/pipeline/load`
+
+Data and analytics:
+- `GET /api/data/superstore`
+- `GET /api/data/stats`
+- `GET /api/analytics/sales-trends`
+- `GET /api/analytics/category-performance`
+- `GET /api/analytics/regional-analysis`
+
+ML:
+- `GET /api/model/info`
+- `GET /api/model/metrics`
+- `POST /api/model/retrain`
+- `POST /api/predict/sales`
+
+For full request/response examples, see `api/README.md`.
+
+## Notebooks
+
+- EDA: `notebook/EDA.ipynb`
+- Additional EDA: `notebook/Eda2.ipynb`
+- ML experimentation: `ml/ml.ipynb`
+
+## Documentation
+
+- Quick setup and walkthrough: `QUICKSTART.md`
+- API details: `api/README.md`
+- Frontend usage: `frontend/README.md`
+- EDA notes: `docs/README.md`
+
+## Current Status
+
+- Flask API is implemented and operational from `api/main.py`
+- ETL orchestration is implemented in `etl/pipeline.py`
+- Baseline sales prediction model is implemented in `ml/model.py`
+
+## Notes
+
+- This project is intended for learning and portfolio use.
+- For best compatibility, use the provided conda environment.
 
