@@ -31,6 +31,7 @@ MODEL_PATH = MODEL_DIR / 'sales_model.pkl'
 SCALER_PATH = MODEL_DIR / 'scaler.pkl'
 FEATURES_PATH = MODEL_DIR / 'features.pkl'
 METADATA_PATH = MODEL_DIR / 'metadata.json'
+DEFAULT_TRAINING_DATA_PATH = Path(__file__).parent.parent / 'data' / 'processed' / 'cleansuperstoredata.csv'
 
 
 class SalesPredictor:
@@ -42,6 +43,8 @@ class SalesPredictor:
         self.feature_names = None
         self.metadata = None
         self.load_model()
+        if not self.is_model_trained():
+            self._auto_train_if_possible()
     
     def ensure_model_dir(self):
         """Ensure models directory exists"""
@@ -279,6 +282,21 @@ class SalesPredictor:
                 logger.warning("No saved model found")
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
+
+    def _auto_train_if_possible(self):
+        """Train a default model when no persisted artifacts exist yet."""
+        try:
+            if not DEFAULT_TRAINING_DATA_PATH.exists():
+                logger.warning(
+                    "Auto-train skipped: default data file not found at %s",
+                    DEFAULT_TRAINING_DATA_PATH
+                )
+                return
+
+            logger.info("No trained model found. Auto-training using default dataset.")
+            self.train_model(str(DEFAULT_TRAINING_DATA_PATH))
+        except Exception as e:
+            logger.error(f"Auto-train failed: {e}")
     
     def is_model_trained(self) -> bool:
         """Check if model is trained and ready"""

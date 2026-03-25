@@ -372,7 +372,7 @@ async function runExtract() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                file_path: '../data/raw/SuperstoreData.csv',
+                file_path: 'data/raw/SuperstoreData.csv',
                 encoding: 'ISO-8859-1'
             })
         });
@@ -394,7 +394,7 @@ async function runTransform() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                file_path: '../data/raw/SuperstoreData.csv',
+                file_path: 'data/raw/SuperstoreData.csv',
                 order_date_col: 'Order_Date',
                 ship_date_col: 'Ship_Date',
                 lowercase_categories: true,
@@ -419,7 +419,7 @@ async function runValidate() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                file_path: '../data/processed/cleansuperstoredata.csv'
+                file_path: 'data/processed/cleansuperstoredata.csv'
             })
         });
         
@@ -625,7 +625,7 @@ async function retrainModel() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                data_path: '../data/processed/cleansuperstoredata.csv'
+                data_path: 'data/processed/cleansuperstoredata.csv'
             })
         });
         
