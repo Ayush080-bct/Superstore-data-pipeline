@@ -1,10 +1,10 @@
 import logging
 from pathlib import Path
 
-from .extractors import extract_data
-from .transform import transform
-from .validate import validate_data
-from .load import load_data as load
+from extractors import extract_data
+from transform import transform
+from validate import validate_data
+from load import load_data as load
 
 
 logging.basicConfig(
@@ -22,7 +22,6 @@ def run_pipeline():
     logger.info("Pipeline started")
 
     try:
-        # Use absolute paths based on project root
         raw_data_path = PROJECT_ROOT / "data" / "raw" / "SuperstoreData.csv"
         
         logger.info("Starting extract step")
