@@ -6,10 +6,7 @@ from .transform import transform
 from .validate import validate_data
 from .load import load_data as load
 
-from extractors import extract_data
-from transform import transform
-from validate import validate_data
-from load import load_data as load
+
 
 logging.basicConfig(
     level=logging.INFO,
