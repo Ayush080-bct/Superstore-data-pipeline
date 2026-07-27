@@ -21,12 +21,12 @@ def transform(
     logger.info("Transformation started")
     data = df.copy()#This create a new dataframe object with its own copy of data ,changing this won't affect df
     if order_date_col in data.columns:
-        data[order_date_col] = pd.to_datetime(data[order_date_col], errors="coerce")
+        data[order_date_col] = pd.to_datetime(data[order_date_col], dayfirst=True,errors="coerce")
         logger.info(f"Converted {order_date_col} to datetime")
     
 
     if ship_date_col in data.columns:
-        data[ship_date_col] = pd.to_datetime(data[ship_date_col], errors="coerce")#error =coerce 
+        data[ship_date_col] = pd.to_datetime(data[ship_date_col], dayfirst=True,errors="coerce")#error =coerce 
         #fill invalid date which can none data type also with NaT(Not a time)
         logger.info(f"Converted {ship_date_col} to datetime")
 
