@@ -2,9 +2,6 @@
 ML Model Management Module
 Handles model training, prediction, serialization, and metrics
 """
-
-import os
-import sys
 import pickle
 import logging
 from pathlib import Path
@@ -159,10 +156,18 @@ class SalesPredictor:
         try:
             # Convert to DataFrame with same structure as training
             df_input = pd.DataFrame([features_dict])
-            
+
+            # Normalize categorical text the same way etl/transform.py does during
+            # training (strip + lowercase). Without this, "Consumer" produces a
+            # dummy column "Segment_Consumer" which never matches the trained
+            # "Segment_consumer" column, so every one-hot column silently ends up
+            # 0 and the model just returns its intercept for every request.
+            for col in df_input.select_dtypes(include=["object", "string"]).columns:
+                df_input[col] = df_input[col].astype("string").str.strip().str.lower()
+
             # One-hot encode
             df_encoded = pd.get_dummies(df_input)
-            
+
             # Ensure same features as training data
             for feature in self.feature_names:
                 if feature not in df_encoded.columns:
