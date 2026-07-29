@@ -52,3 +52,14 @@ class SmoothedTargetEncoder:
             / (stats["count"] + smoothing)
         )
         return self
+
+    def transform(self, df: pd.DataFrame) -> pd.Series:
+        if self.mapping_ is None:
+            raise RuntimeError("Encoder must be fit() before transform()")
+        # Categories not seen during fit (new products/customers/cities at
+        # inference time) fall back to the global mean.
+        return df[self.column].map(self.mapping_).fillna(self.global_mean_)
+
+    def fit_transform(self, df: pd.DataFrame, column: str, target: pd.Series) -> pd.Series:
+        self.fit(df, column, target)
+        return self.transform(df)
