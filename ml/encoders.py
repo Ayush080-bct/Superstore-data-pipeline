@@ -63,3 +63,20 @@ class SmoothedTargetEncoder:
     def fit_transform(self, df: pd.DataFrame, column: str, target: pd.Series) -> pd.Series:
         self.fit(df, column, target)
         return self.transform(df)
+
+    def to_dict(self) -> dict:
+        """For saving alongside the model (pickle-friendly plain dict)."""
+        return {
+            "column": self.column,
+            "smoothing": self.smoothing,
+            "global_mean": self.global_mean_,
+            "mapping": self.mapping_.to_dict() if self.mapping_ is not None else {},
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "SmoothedTargetEncoder":
+        enc = cls(smoothing=d["smoothing"])
+        enc.column = d["column"]
+        enc.global_mean_ = d["global_mean"]
+        enc.mapping_ = pd.Series(d["mapping"])
+        return enc
