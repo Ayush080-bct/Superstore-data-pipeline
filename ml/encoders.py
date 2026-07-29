@@ -22,3 +22,33 @@ on the full dataset (train+test together) leaks the test set's own Sales
 values into the encoding used to predict it, which inflates evaluation
 metrics and won't hold up on truly new data.
 """
+
+import pandas as pd
+from typing import Optional
+
+
+class SmoothedTargetEncoder:
+    def __init__(self, smoothing: float = 10.0):
+        """
+        Args:
+            smoothing: higher = more shrinkage toward the global mean for
+                rare categories. 10 means a category needs roughly 10+
+                occurrences before it's trusted close to its own mean.
+        """
+        self.smoothing = smoothing
+        self.mapping_: Optional[pd.Series] = None
+        self.global_mean_: Optional[float] = None
+        self.column: Optional[str] = None
+
+    def fit(self, df: pd.DataFrame, column: str, target: pd.Series) -> "SmoothedTargetEncoder":
+        """Fit on TRAINING DATA ONLY."""
+        self.column = column
+        self.global_mean_ = float(target.mean())
+
+        stats = target.groupby(df[column]).agg(["mean", "count"])
+        smoothing = self.smoothing
+        self.mapping_ = (
+            (stats["count"] * stats["mean"] + smoothing * self.global_mean_)
+            / (stats["count"] + smoothing)
+        )
+        return self
