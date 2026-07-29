@@ -6,7 +6,7 @@ import pickle
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Tuple, List, Any
+from typing import Dict, List, Any
 
 import pandas as pd
 import numpy as np
@@ -14,6 +14,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+from ml.encoders import SmoothedTargetEncoder
 
 # Setup logging
 logging.basicConfig(
@@ -27,6 +29,7 @@ MODEL_DIR = Path(__file__).parent / 'models'
 MODEL_PATH = MODEL_DIR / 'sales_model.pkl'
 SCALER_PATH = MODEL_DIR / 'scaler.pkl'
 FEATURES_PATH = MODEL_DIR / 'features.pkl'
+ENCODERS_PATH = MODEL_DIR / 'encoders.pkl'
 METADATA_PATH = MODEL_DIR / 'metadata.json'
 DEFAULT_TRAINING_DATA_PATH = Path(__file__).parent.parent / 'data' / 'processed' / 'cleansuperstoredata.csv'
 
@@ -34,10 +37,15 @@ DEFAULT_TRAINING_DATA_PATH = Path(__file__).parent.parent / 'data' / 'processed'
 class SalesPredictor:
     """Manages ML model for sales prediction"""
     
+    # Columns encoded with leakage-safe smoothed target encoding
+    # (fit on train split only — see ml/encoders.py)
+    TARGET_ENCODE_COLUMNS = ['Product_ID', 'Customer_ID', 'City']
+
     def __init__(self):
         self.model = None
         self.scaler = None
         self.feature_names = None
+        self.encoders = None  # dict[str, SmoothedTargetEncoder]
         self.metadata = None
         self.load_model()
         if not self.is_model_trained():
@@ -63,46 +71,76 @@ class SalesPredictor:
             logger.info(f"Loading data from {data_path}")
             df = pd.read_csv(data_path)
             
-            # Columns to drop (same as in notebook)
+            # Columns with no predictive value or that would leak identity
+            # info that doesn't generalize (raw dates, IDs used only as row
+            # keys, free-text names). Product_ID, Customer_ID, and City are
+            # KEPT here — they're handled separately below with smoothed
+            # target encoding instead of being dropped or one-hot encoded.
             drop_columns = [
                 'Row_ID', 'Order_ID', 'Order_Date', 'Ship_Date', 'Ship_Mode',
-                'Customer_ID', 'Product_ID', 'Customer_Name', 'Order_Year',
-                'Order_Month', 'Order_Weekday', 'Country', 'State', 'City',
-                'Postal_Code', 'Product_Name', 'Ship_Year', 'Ship_Month', 'Ship_Weekday'
+                'Customer_Name', 'Order_Year', 'Order_Month', 'Order_Weekday',
+                'Country', 'State', 'Postal_Code', 'Product_Name',
+                'Ship_Year', 'Ship_Month', 'Ship_Weekday'
             ]
             
             df_models = df.drop(
                 columns=[col for col in drop_columns if col in df.columns],
                 errors="ignore"
             )
+
+            target_encode_cols = [c for c in self.TARGET_ENCODE_COLUMNS if c in df_models.columns]
+
+            # One-hot encode the low-cardinality categoricals now. This is
+            # safe to do before the split — it only depends on the fixed set
+            # of category labels, never on the Sales target, so there's no
+            # leakage risk the way there is with target encoding.
+            low_card_cols = [
+                c for c in df_models.select_dtypes(include=["object", "string"]).columns
+                if c not in target_encode_cols
+            ]
+            df_models = pd.get_dummies(df_models, columns=low_card_cols, drop_first=True)
+
+            # Split BEFORE target encoding. The encoder must never see test
+            # rows' Sales values during fit, or evaluation metrics will be
+            # inflated in a way that won't hold up on real new data.
+            train_df, test_df = train_test_split(df_models, test_size=0.2, random_state=42)
+
+            self.encoders = {}
+            for col in target_encode_cols:
+                enc = SmoothedTargetEncoder(smoothing=10.0)
+                enc.fit(train_df, col, train_df['Sales'])
+                train_df[f'{col}_enc'] = enc.transform(train_df)
+                test_df[f'{col}_enc'] = enc.transform(test_df)
+                self.encoders[col] = enc
+                logger.info(f"Fit smoothed target encoding for {col} (train split only)")
+
+            train_df = train_df.drop(columns=target_encode_cols)
+            test_df = test_df.drop(columns=target_encode_cols)
+
+            X_train = train_df.drop(columns=['Sales'])
+            y_train = train_df['Sales']
+            X_test = test_df.drop(columns=['Sales'])
+            y_test = test_df['Sales']
+
+            # Store feature names for later predictions (column order matters
+            # for both scaling and the model, so this is the single source
+            # of truth predict() aligns everything against)
+            self.feature_names = X_train.columns.tolist()
+            X_test = X_test[self.feature_names]
             
-            # Prepare features and target
-            X = df_models.drop(columns=['Sales'], errors="ignore")
-            y = df_models['Sales']
+            logger.info(f"Training data shape: {X_train.shape}")
             
-            # One-hot encode categorical features
-            X_encoded = pd.get_dummies(X, drop_first=True)
-            
-            # Store feature names for later predictions
-            self.feature_names = X_encoded.columns.tolist()
-            
-            logger.info(f"Training data shape: {X_encoded.shape}")
-            
-            # Scale features
+            # Scale features (fit on train only, same reasoning as the encoders)
             self.scaler = StandardScaler()
-            X_scaled = self.scaler.fit_transform(X_encoded)
-            
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(
-                X_scaled, y, test_size=0.2, random_state=42
-            )
+            X_train_scaled = self.scaler.fit_transform(X_train)
+            X_test_scaled = self.scaler.transform(X_test)
             
             # Train model
             self.model = LinearRegression()
-            self.model.fit(X_train, y_train)
+            self.model.fit(X_train_scaled, y_train)
             
             # Evaluate
-            y_pred = self.model.predict(X_test)
+            y_pred = self.model.predict(X_test_scaled)
             mae = mean_absolute_error(y_test, y_pred)
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
             r2 = r2_score(y_test, y_pred)
@@ -113,6 +151,7 @@ class SalesPredictor:
                 'model_type': 'LinearRegression',
                 'num_features': len(self.feature_names),
                 'feature_names': self.feature_names,
+                'target_encoded_columns': target_encode_cols,
                 'test_size': 0.2,
                 'random_state': 42,
                 'metrics': {
@@ -164,6 +203,20 @@ class SalesPredictor:
             # 0 and the model just returns its intercept for every request.
             for col in df_input.select_dtypes(include=["object", "string"]).columns:
                 df_input[col] = df_input[col].astype("string").str.strip().str.lower()
+
+            # Apply the saved smoothed target encoders (fit on train split only
+            # during training) for Product_ID / Customer_ID / City. A value not
+            # seen during training falls back to that encoder's global mean.
+            if self.encoders:
+                for col, enc in self.encoders.items():
+                    if col in df_input.columns:
+                        df_input[f'{col}_enc'] = enc.transform(df_input)
+                    else:
+                        # caller didn't supply this field at all — use the
+                        # encoder's global mean rather than erroring out
+                        df_input[f'{col}_enc'] = enc.global_mean_
+                    if col in df_input.columns:
+                        df_input = df_input.drop(columns=[col])
 
             # One-hot encode
             df_encoded = pd.get_dummies(df_input)
@@ -254,6 +307,12 @@ class SalesPredictor:
             
             with open(FEATURES_PATH, 'wb') as f:
                 pickle.dump(self.feature_names, f)
+
+            with open(ENCODERS_PATH, 'wb') as f:
+                pickle.dump(
+                    {col: enc.to_dict() for col, enc in (self.encoders or {}).items()},
+                    f
+                )
             
             import json
             with open(METADATA_PATH, 'w') as f:
@@ -276,6 +335,15 @@ class SalesPredictor:
                 
                 with open(FEATURES_PATH, 'rb') as f:
                     self.feature_names = pickle.load(f)
+
+                if ENCODERS_PATH.exists():
+                    with open(ENCODERS_PATH, 'rb') as f:
+                        raw_encoders = pickle.load(f)
+                    self.encoders = {
+                        col: SmoothedTargetEncoder.from_dict(d) for col, d in raw_encoders.items()
+                    }
+                else:
+                    self.encoders = {}
                 
                 if METADATA_PATH.exists():
                     import json
