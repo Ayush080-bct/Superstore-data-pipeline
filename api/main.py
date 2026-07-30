@@ -166,9 +166,11 @@ def transform_only():
         ship_date_col = request_data.get('ship_date_col', 'Ship_Date')
         lowercase_categories = request_data.get('lowercase_categories', True)
         remove_duplicates = request_data.get('remove_duplicates', True)
+        # Same default as /api/pipeline/extract — the source CSV is not UTF-8.
+        encoding = request_data.get('encoding', 'ISO-8859-1')
         
         logger.info(f"Transforming data from {file_path}")
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path, encoding=encoding)
         
         df_transformed = transform(
             df,
@@ -177,6 +179,14 @@ def transform_only():
             lowercase_categories=lowercase_categories,
             remove_duplicates=remove_duplicates
         )
+
+        # Persist so /api/model/retrain (and auto-train) actually see the new
+        # columns (e.g. Shipping_Days) instead of silently training on the
+        # previous, stale file — this step was a no-op before this fix.
+        output_path = PROJECT_ROOT / 'data' / 'processed' / 'cleansuperstoredata.csv'
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        df_transformed.to_csv(output_path, index=False)
+        logger.info(f"Saved transformed data to {output_path}")
         
         return jsonify({
             'status': 'success',
@@ -184,7 +194,8 @@ def transform_only():
             'rows': len(df_transformed),
             'columns': len(df_transformed.columns),
             'new_columns_added': ['Order_Year', 'Order_Month', 'Order_Weekday', 
-                                 'Ship_Year', 'Ship_Month', 'Ship_Weekday'],
+                                 'Ship_Year', 'Ship_Month', 'Ship_Weekday', 'Shipping_Days'],
+            'saved_to': str(output_path),
             'timestamp': datetime.now().isoformat()
         }), 200
     except Exception as e:
