@@ -1,8 +1,9 @@
 {
-  "training_date": "2026-07-28T21:05:37.468879",
+  "training_date": "2026-07-30T19:36:30.901257",
   "model_type": "LinearRegression",
-  "num_features": 23,
+  "num_features": 27,
   "feature_names": [
+    "Shipping_Days",
     "Segment_corporate",
     "Segment_home office",
     "Region_east",
@@ -25,14 +26,22 @@
     "Sub_Category_phones",
     "Sub_Category_storage",
     "Sub_Category_supplies",
-    "Sub_Category_tables"
+    "Sub_Category_tables",
+    "Product_ID_enc",
+    "Customer_ID_enc",
+    "City_enc"
+  ],
+  "target_encoded_columns": [
+    "Product_ID",
+    "Customer_ID",
+    "City"
   ],
   "test_size": 0.2,
   "random_state": 42,
   "metrics": {
-    "mae": 238.6697716014348,
-    "rmse": 740.9919765979622,
-    "r2_score": 0.17853190881597814,
+    "mae": 188.48414196052457,
+    "rmse": 667.5731558738025,
+    "r2_score": 0.3332524677558638,
     "test_samples": 1960,
     "train_samples": 7840
   }
