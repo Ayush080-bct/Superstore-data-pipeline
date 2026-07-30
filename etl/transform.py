@@ -70,4 +70,5 @@ def transform(
 if __name__ == "__main__":
     from  extractors import extract_data
     df = extract_data(str(PROJECT_ROOT / "data" / "raw" / "SuperstoreData.csv"), encoded_system="ISO-8859-1")
+
     df = transform(df)
