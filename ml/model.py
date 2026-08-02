@@ -304,12 +304,8 @@ class SalesPredictor:
             'num_features': self.metadata['num_features'],
             'feature_names': self.metadata['feature_names'],
             'metrics': self.metadata['metrics'],
-            'model_parameters': {
-                'fit_intercept': True,
-                'copy_X': True,
-                'positive': False,
-                'random_state': 42
-            }
+            'compared_models': self.metadata.get('compared_models', {}),
+            'model_parameters': self.model.get_params() if self.model is not None else {},
         }
     
     def _save_model(self):
