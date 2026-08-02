@@ -165,62 +165,39 @@ class SalesPredictor:
     def predict(self, features_dict: Dict[str, Any]) -> float:
         """
         Make prediction on new data
-        
-        Args:
-            features_dict: Dictionary of feature values
-            
-        Returns:
-            Predicted sales value
         """
         if self.model is None:
             raise RuntimeError("Model not loaded. Please train or load model first.")
         
         try:
-            # Convert to DataFrame with same structure as training
             df_input = pd.DataFrame([features_dict])
-
-            # Normalize categorical text the same way etl/transform.py does during
-            # training (strip + lowercase). Without this, "Consumer" produces a
-            # dummy column "Segment_Consumer" which never matches the trained
-            # "Segment_consumer" column, so every one-hot column silently ends up
-            # 0 and the model just returns its intercept for every request.
             for col in df_input.select_dtypes(include=["object", "string"]).columns:
                 df_input[col] = df_input[col].astype("string").str.strip().str.lower()
 
-            # Apply the saved smoothed target encoders (fit on train split only
-            # during training) for Product_ID / Customer_ID / City. A value not
-            # seen during training falls back to that encoder's global mean.
             if self.encoders:
                 for col, enc in self.encoders.items():
                     if col in df_input.columns:
                         df_input[f'{col}_enc'] = enc.transform(df_input)
                     else:
-                        # caller didn't supply this field at all — use the
-                        # encoder's global mean rather than erroring out
                         df_input[f'{col}_enc'] = enc.global_mean_
                     if col in df_input.columns:
                         df_input = df_input.drop(columns=[col])
 
-            # One-hot encode
             df_encoded = pd.get_dummies(df_input)
-
-            # Ensure same features as training data
             for feature in self.feature_names:
                 if feature not in df_encoded.columns:
                     df_encoded[feature] = 0
-            
-            # Use only features that were in training
             df_encoded = df_encoded[self.feature_names]
-            
-            # Scale
+
             X_scaled = self.scaler.transform(df_encoded)
-            
-            # Predict
-            prediction = self.model.predict(X_scaled)[0]
-            
+
+            # 👉 Predict in log-space, then invert
+            prediction_log = self.model.predict(X_scaled)[0]
+            prediction = np.expm1(prediction_log)
+
             logger.info(f"Prediction made: {prediction:.2f}")
             return float(prediction)
-            
+
         except Exception as e:
             logger.error(f"Prediction failed: {e}")
             raise
