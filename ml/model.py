@@ -58,53 +58,34 @@ class SalesPredictor:
     def train_model(self, data_path: str) -> Dict[str, Any]:
         """
         Train the Linear Regression model on data
-        
-        Args:
-            data_path: Path to processed data CSV
-            
-        Returns:
-            Dictionary with training results and metrics
         """
         try:
             self.ensure_model_dir()
-            
             logger.info(f"Loading data from {data_path}")
             df = pd.read_csv(data_path)
-            
-            # Columns with no predictive value or that would leak identity
-            # info that doesn't generalize (raw dates, IDs used only as row
-            # keys, free-text names). Product_ID, Customer_ID, and City are
-            # KEPT here — they're handled separately below with smoothed
-            # target encoding instead of being dropped or one-hot encoded.
+
+            # Drop columns with no predictive value
             drop_columns = [
                 'Row_ID', 'Order_ID', 'Order_Date', 'Ship_Date', 'Ship_Mode',
                 'Customer_Name', 'Order_Year', 'Order_Month', 'Order_Weekday',
                 'Country', 'State', 'Postal_Code', 'Product_Name',
                 'Ship_Year', 'Ship_Month', 'Ship_Weekday'
             ]
-            
-            df_models = df.drop(
-                columns=[col for col in drop_columns if col in df.columns],
-                errors="ignore"
-            )
+            df_models = df.drop(columns=[c for c in drop_columns if c in df.columns], errors="ignore")
 
             target_encode_cols = [c for c in self.TARGET_ENCODE_COLUMNS if c in df_models.columns]
 
-            # One-hot encode the low-cardinality categoricals now. This is
-            # safe to do before the split — it only depends on the fixed set
-            # of category labels, never on the Sales target, so there's no
-            # leakage risk the way there is with target encoding.
+            # One-hot encode low-cardinality categoricals
             low_card_cols = [
                 c for c in df_models.select_dtypes(include=["object", "string"]).columns
                 if c not in target_encode_cols
             ]
             df_models = pd.get_dummies(df_models, columns=low_card_cols, drop_first=True)
 
-            # Split BEFORE target encoding. The encoder must never see test
-            # rows' Sales values during fit, or evaluation metrics will be
-            # inflated in a way that won't hold up on real new data.
+            # 👉 Split BEFORE target encoding
             train_df, test_df = train_test_split(df_models, test_size=0.2, random_state=42)
 
+            # Target encoding (fit only on train split)
             self.encoders = {}
             for col in target_encode_cols:
                 enc = SmoothedTargetEncoder(smoothing=10.0)
@@ -112,7 +93,7 @@ class SalesPredictor:
                 train_df[f'{col}_enc'] = enc.transform(train_df)
                 test_df[f'{col}_enc'] = enc.transform(test_df)
                 self.encoders[col] = enc
-                logger.info(f"Fit smoothed target encoding for {col} (train split only)")
+                logger.info(f"Fit smoothed target encoding for {col}")
 
             train_df = train_df.drop(columns=target_encode_cols)
             test_df = test_df.drop(columns=target_encode_cols)
@@ -122,30 +103,32 @@ class SalesPredictor:
             X_test = test_df.drop(columns=['Sales'])
             y_test = test_df['Sales']
 
-            # Store feature names for later predictions (column order matters
-            # for both scaling and the model, so this is the single source
-            # of truth predict() aligns everything against)
+            # 👉 NEW: log-transform the target
+            y_train_log = np.log1p(y_train)
+            y_test_log = np.log1p(y_test)
+
             self.feature_names = X_train.columns.tolist()
             X_test = X_test[self.feature_names]
-            
+
             logger.info(f"Training data shape: {X_train.shape}")
-            
-            # Scale features (fit on train only, same reasoning as the encoders)
+
+            # Scale features
             self.scaler = StandardScaler()
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
-            
-            # Train model
+
+            # Train model on log-transformed target
             self.model = LinearRegression()
-            self.model.fit(X_train_scaled, y_train)
-            
-            # Evaluate
-            y_pred = self.model.predict(X_test_scaled)
+            self.model.fit(X_train_scaled, y_train_log)
+
+            # Evaluate in log-space, then invert predictions
+            y_pred_log = self.model.predict(X_test_scaled)
+            y_pred = np.expm1(y_pred_log)
+
             mae = mean_absolute_error(y_test, y_pred)
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
             r2 = r2_score(y_test, y_pred)
-            
-            # Store metadata
+
             self.metadata = {
                 'training_date': datetime.now().isoformat(),
                 'model_type': 'LinearRegression',
@@ -160,24 +143,24 @@ class SalesPredictor:
                     'r2_score': float(r2),
                     'test_samples': len(y_test),
                     'train_samples': len(y_train)
-                }
+                },
+                'target_transform': 'log1p/expm1'
             }
-            
-            # Save model and metadata
+
             self._save_model()
-            
             logger.info(f"Model training complete. MAE: {mae:.2f}, RMSE: {rmse:.2f}, R²: {r2:.4f}")
-            
+
             return {
                 'status': 'success',
                 'message': 'Model trained successfully',
                 'metrics': self.metadata['metrics'],
                 'feature_count': len(self.feature_names)
             }
-            
+
         except Exception as e:
             logger.error(f"Model training failed: {e}")
             raise
+    
     
     def predict(self, features_dict: Dict[str, Any]) -> float:
         """
