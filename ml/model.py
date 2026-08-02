@@ -14,7 +14,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
+from sklearn.ensemble import RandomForestRegressor
 from ml.encoders import SmoothedTargetEncoder
 
 # Setup logging
@@ -55,7 +55,7 @@ class SalesPredictor:
         """Ensure models directory exists"""
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
     
-    def train_model(self, data_path: str) -> Dict[str, Any]:
+    def train_model(self, data_path: str, model_type = "compare") -> Dict[str, Any]:
         """
         Train the Linear Regression model on data
         """
