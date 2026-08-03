@@ -578,9 +578,9 @@ async function loadModelInfo() {
         if (result.status === 'success') {
             const info = result.model_info;
             infoDiv.innerHTML = `
-                <p><strong>Model Type:</strong> Linear Regression</p>
+                <p><strong>Model Type:</strong> ${info.model_type || 'Unknown'}</p>
                 <p><strong>Training Status:</strong> <span class="badge bg-success">Trained</span></p>
-                <p><strong>Features Used:</strong> ${info.feature_count || 'N/A'}</p>
+                <p><strong>Features Used:</strong> ${info.num_features || 'N/A'}</p>
                 <p><strong>Training Date:</strong> ${info.training_date || 'Not available'}</p>
             `;
         } else {
